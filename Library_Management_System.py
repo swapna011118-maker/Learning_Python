@@ -1,45 +1,84 @@
 import time
+import mysql.connector
 from difflib import get_close_matches
+
+
+def get_db_connection():
+    return mysql.connector.connect(
+        host="localhost",
+        user="root",
+        password="home@123",
+        database="mydb"
+    )
+
+
 class Books:
-    def __init__(self, name, author, available_for_booking=True):
+    def __init__(self, book_id, name, author, available_for_booking=True):
+        self.id = book_id
         self.name = name
         self.author = author
         self.available_for_booking = available_for_booking
-    def check_availability(self):
-        return "This book is available for taking" if self.available_for_booking else "This book is currently not available"
+
+
 class Users:
     def __init__(self, user_name, user_id):
         self.user_name = user_name
         self.user_id = user_id
         self.books_borrowed = []
+
+    @staticmethod
+    def load_books_from_db():
+        """Fetches all books from the SQL database."""
+        books_list = []
+        conn = get_db_connection()
+        cursor = conn.cursor(dictionary=True)
+
+        cursor.execute("SELECT id, title, author, available FROM books")
+        for row in cursor.fetchall():
+            books_list.append(Books(row['id'], row['title'], row['author'], bool(row['available'])))
+        conn.close()
+        return books_list
+
     @staticmethod
     def view_available_books_formatted(books):
-        print("-" * 80)
-        print(f"{'S.No':<5} {'Book Name':<45} {'Author'}")
-        print("-" * 80)
-        count = 1
+        print("-" * 85)
+        print(f"{'ID':<5} {'Book Name':<50} {'Author'}")
+        print("-" * 85)
+        count = 0
         for book in books:
             if book.available_for_booking:
-                print(f"{count:<5} {book.name:<45} {book.author}")
+                print(f"{book.id:<5} {book.name:<50} {book.author}")
                 count += 1
-        print("-" * 80)
-        print(f"Total Available Books: {count - 1}\n")  # \n for spacing
+        print("-" * 85)
+        print(f"Total Available Books: {count}\n")
+
+    def update_db_status(self, book_id, status):
+        """Updates the 'available' column in SQL."""
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("UPDATE books SET available = %s WHERE id = %s", (status, book_id))
+        conn.commit()
+        conn.close()
+
     def borrow_book(self, book):
         if book.available_for_booking:
             self.books_borrowed.append(book.name)
             book.available_for_booking = False
+            self.update_db_status(book.id, False)  # Sync with SQL
             return f"{self.user_name} has borrowed '{book.name}'"
         return f"Sorry, '{book.name}' is not available"
+
     def return_book(self, book):
         if book.name in self.books_borrowed:
             self.books_borrowed.remove(book.name)
             book.available_for_booking = True
+            self.update_db_status(book.id, True)  # Sync with SQL
             return f"{self.user_name} has returned '{book.name}'"
         return f"{self.user_name} did not borrow '{book.name}'"
-    def view_borrowed_books(self):
-        return f"{self.user_name} has borrowed: {', '.join(self.books_borrowed) if self.books_borrowed else 'No books borrowed'}"
+
     def user_info(self):
         return f"User Name: {self.user_name}, User ID: {self.user_id}"
+
     @staticmethod
     def search_books_by_author(books, author_name, cutoff=0.7):
         matched_books = []
@@ -47,379 +86,67 @@ class Users:
             if get_close_matches(author_name.lower(), [book.author.lower()], cutoff=cutoff):
                 matched_books.append(book.name)
         return f"Books by {author_name}: {', '.join(matched_books)}" if matched_books else "No books found"
-books = []
-# Adding a few for brevity; you can add all 150+ from your dataset
-books.append(Books("To Kill a Mockingbird", "Harper Lee", True))
-books.append(Books("1984", "George Orwell", True))
-books.append(Books("Pride and Prejudice", "Jane Austen", True))
-books.append(Books("The Great Gatsby", "F. Scott Fitzgerald", True))
-books.append(Books("Moby-Dick", "Herman Melville", True))
-books.append(Books("War and Peace", "Leo Tolstoy", True))
-books.append(Books("The Catcher in the Rye", "J.D. Salinger", True))
-books.append(Books("The Hobbit", "J.R.R. Tolkien", True))
-books.append(Books("The Lord of the Rings", "J.R.R. Tolkien", True))
-books.append(Books("Harry Potter and the Sorcerer's Stone", "J.K. Rowling", True))
-books.append(Books("Harry Potter and the Chamber of Secrets", "J.K. Rowling", True))
-books.append(Books("Harry Potter and the Prisoner of Azkaban", "J.K. Rowling", True))
-books.append(Books("Harry Potter and the Goblet of Fire", "J.K. Rowling", True))
-books.append(Books("Harry Potter and the Order of the Phoenix", "J.K. Rowling", True))
-books.append(Books("Harry Potter and the Half-Blood Prince", "J.K. Rowling", True))
-books.append(Books("Harry Potter and the Deathly Hallows", "J.K. Rowling", True))
-books.append(Books("The Alchemist", "Paulo Coelho", True))
-books.append(Books("Think and Grow Rich", "Napoleon Hill", True))
-books.append(Books("Rich Dad Poor Dad", "Robert Kiyosaki", True))
-books.append(Books("Atomic Habits", "James Clear", True))
-books.append(Books("The 7 Habits of Highly Effective People", "Stephen Covey", True))
-books.append(Books("How to Win Friends and Influence People", "Dale Carnegie", True))
-books.append(Books("The Power of Now", "Eckhart Tolle", True))
-books.append(Books("The Psychology of Money", "Morgan Housel", True))
-books.append(Books("Sapiens", "Yuval Noah Harari", True))
-books.append(Books("Homo Deus", "Yuval Noah Harari", True))
-books.append(Books("Ikigai", "Héctor García", True))
-books.append(Books("Wings of Fire", "A. P. J. Abdul Kalam", True))
-books.append(Books("The Diary of a Young Girl", "Anne Frank", True))
-books.append(Books("The Book Thief", "Markus Zusak", True))
-books.append(Books("Life of Pi", "Yann Martel", True))
-books.append(Books("The Kite Runner", "Khaled Hosseini", True))
-books.append(Books("A Thousand Splendid Suns", "Khaled Hosseini", True))
-books.append(Books("The Hunger Games", "Suzanne Collins", True))
-books.append(Books("Catching Fire", "Suzanne Collins", True))
-books.append(Books("Mockingjay", "Suzanne Collins", True))
-books.append(Books("Divergent", "Veronica Roth", True))
-books.append(Books("Insurgent", "Veronica Roth", True))
-books.append(Books("Allegiant", "Veronica Roth", True))
-books.append(Books("The Fault in Our Stars", "John Green", True))
-books.append(Books("Looking for Alaska", "John Green", True))
-books.append(Books("The Maze Runner", "James Dashner", True))
-books.append(Books("The Scorch Trials", "James Dashner", True))
-books.append(Books("The Death Cure", "James Dashner", True))
-books.append(Books("A Study in Scarlet", "Arthur Conan Doyle", True))
-books.append(Books("The Hound of the Baskervilles", "Arthur Conan Doyle", True))
-books.append(Books("Dracula", "Bram Stoker", True))
-books.append(Books("Frankenstein", "Mary Shelley", True))
-books.append(Books("The Odyssey", "Homer", True))
-books.append(Books("The Iliad", "Homer", True))
-books.append(Books("Hamlet", "William Shakespeare", True))
-books.append(Books("Macbeth", "William Shakespeare", True))
-books.append(Books("Romeo and Juliet", "William Shakespeare", True))
-books.append(Books("The Merchant of Venice", "William Shakespeare", True))
-books.append(Books("Animal Farm", "George Orwell", True))
-books.append(Books("Fahrenheit 451", "Ray Bradbury", True))
-books.append(Books("The Old Man and the Sea", "Ernest Hemingway", True))
-books.append(Books("The Da Vinci Code", "Dan Brown", True))
-books.append(Books("Inferno", "Dan Brown", True))
-books.append(Books("Angels and Demons", "Dan Brown", True))
-books.append(Books("IT", "Stephen King", True))
-books.append(Books("The Shining", "Stephen King", True))
-books.append(Books("A Brief History of Time", "Stephen Hawking", True))
-books.append(Books("Cosmos", "Carl Sagan", True))
-books.append(Books("The Art of War", "Sun Tzu", True))
-books.append(Books("Meditations", "Marcus Aurelius", True))
-books.append(Books("Bhagavad Gita", "Vyasa", True))
-books.append(Books("Ramayana", "Valmiki", True))
-books.append(Books("Mahabharata", "Vyasa", True))
-books.append(Books("The Silent Patient", "Alex Michaelides", True))
-books.append(Books("Shantaram", "Gregory David Roberts", True))
-books.append(Books("Norwegian Wood", "Haruki Murakami", True))
-books.append(Books("Kafka on the Shore", "Haruki Murakami", True))
-books.append(Books("The Wind-Up Bird Chronicle", "Haruki Murakami", True))
-books.append(Books("The Namesake", "Jhumpa Lahiri", True))
-books.append(Books("Interpreter of Maladies", "Jhumpa Lahiri", True))
-books.append(Books("Midnight's Children", "Salman Rushdie", True))
-books.append(Books("The God of Small Things", "Arundhati Roy", True))
-books.append(Books("Train to Pakistan", "Khushwant Singh", True))
-books.append(Books("Ghachar Ghochar", "Vivek Shanbhag", True))
-books.append(Books("Raavan: Enemy of Aryavarta", "Amish Tripathi", True))
-books.append(Books("Sita: Warrior of Mithila", "Amish Tripathi", True))
-books.append(Books("The Immortals of Meluha", "Amish Tripathi", True))
-books.append(Books("The Secret of the Nagas", "Amish Tripathi", True))
-books.append(Books("The Oath of the Vayuputras", "Amish Tripathi", True))
-books.append(Books("The White Tiger", "Aravind Adiga", True))
-books.append(Books("Life's Amazing Secrets", "Gaur Gopal Das", True))
-books.append(Books("The Palace of Illusions", "Chitra Banerjee Divakaruni", True))
-books.append(Books("Gulliver's Travels", "Jonathan Swift", True))
-books.append(Books("Robinson Crusoe", "Daniel Defoe", True))
-books.append(Books("Treasure Island", "Robert Louis Stevenson", True))
-books.append(Books("The Jungle Book", "Rudyard Kipling", True))
-books.append(Books("Kim", "Rudyard Kipling", True))
-books.append(Books("The Time Machine", "H. G. Wells", True))
-books.append(Books("The Invisible Man", "H. G. Wells", True))
-books.append(Books("The War of the Worlds", "H. G. Wells", True))
-books.append(Books("The Call of the Wild", "Jack London", True))
-books.append(Books("White Fang", "Jack London", True))
-books.append(Books("Don Quixote", "Miguel de Cervantes", True))
-books.append(Books("Les Misérables", "Victor Hugo", True))
-books.append(Books("The Count of Monte Cristo", "Alexandre Dumas", True))
-books.append(Books("The Three Musketeers", "Alexandre Dumas", True))
-books.append(Books("Crime and Punishment", "Fyodor Dostoevsky", True))
-books.append(Books("The Brothers Karamazov", "Fyodor Dostoevsky", True))
-books.append(Books("The Stranger", "Albert Camus", True))
-books.append(Books("The Plague", "Albert Camus", True))
-books.append(Books("The Metamorphosis", "Franz Kafka", True))
-books.append(Books("Lolita", "Vladimir Nabokov", True))
-books.append(Books("The Sun Also Rises", "Ernest Hemingway", True))
-books.append(Books("For Whom the Bell Tolls", "Ernest Hemingway", True))
-books.append(Books("On the Road", "Jack Kerouac", True))
-books.append(Books("The Bell Jar", "Sylvia Plath", True))
-books.append(Books("The Road Less Traveled", "M. Scott Peck", True))
-books.append(Books("Grit", "Angela Duckworth", True))
-books.append(Books("Can't Hurt Me", "David Goggins", True))
-books.append(Books("Start With Why", "Simon Sinek", True))
-books.append(Books("The Lean Startup", "Eric Ries", True))
-books.append(Books("Rework", "Jason Fried", True))
-books.append(Books("Hooked", "Nir Eyal", True))
-books.append(Books("Essentialism", "Greg McKeown", True))
-books.append(Books("The 5 AM Club", "Robin Sharma", True))
-books.append(Books("Ikigai: The Japanese Secret", "Ken Mogi", True))
-books.append(Books("The Power of Habit", "Charles Duhigg", True))
-books.append(Books("The Hitchhiker's Guide to the Galaxy", "Douglas Adams", True))
-books.append(Books("Dune", "Frank Herbert", True))
-books.append(Books("Foundation", "Isaac Asimov", True))
-books.append(Books("I, Robot", "Isaac Asimov", True))
-books.append(Books("Neuromancer", "William Gibson", True))
-books.append(Books("Snow Crash", "Neal Stephenson", True))
-books.append(Books("Brave New World", "Aldous Huxley", True))
-books.append(Books("Slaughterhouse-Five", "Kurt Vonnegut", True))
-books.append(Books("The Handmaid's Tale", "Margaret Atwood", True))
-books.append(Books("Ender's Game", "Orson Scott Card", True))
-books.append(Books("The Martian", "Andy Weir", True))
-books.append(Books("Ready Player One", "Ernest Cline", True))
-books.append(Books("Jurassic Park", "Michael Crichton", True))
-books.append(Books("The Andromeda Strain", "Michael Crichton", True))
-books.append(Books("The Girl on the Train", "Paula Hawkins", True))
-books.append(Books("Big Little Lies", "Liane Moriarty", True))
-books.append(Books("The Night Circus", "Erin Morgenstern", True))
-books.append(Books("The Shadow of the Wind", "Carlos Ruiz Zafón", True))
-books.append(Books("The Alchemist of Loom", "Elise Kova", True))
-books.append(Books("Percy Jackson & the Olympians: The Lightning Thief", "Rick Riordan", True))
-books.append(Books("The Sea of Monsters", "Rick Riordan", True))
-books.append(Books("The Titan's Curse", "Rick Riordan", True))
-books.append(Books("The Battle of the Labyrinth", "Rick Riordan", True))
-books.append(Books("The Last Olympian", "Rick Riordan", True))
-books.append(Books("The Chronicles of Narnia", "C. S. Lewis", True))
-books.append(Books("The Magician's Nephew", "C. S. Lewis", True))
-books.append(Books("The Lion, the Witch and the Wardrobe", "C. S. Lewis", True))
-books.append(Books("Prince Caspian", "C. S. Lewis", True))
-books.append(Books("The Silver Chair", "C. S. Lewis", True))
-books.append(Books("The Last Battle", "C. S. Lewis", True))
-books.append(Books("The Color Purple", "Alice Walker", True))
-books.append(Books("Beloved", "Toni Morrison", True))
-books.append(Books("Invisible Man", "Ralph Ellison", True))
-books.append(Books("The Grapes of Wrath", "John Steinbeck", True))
-books.append(Books("East of Eden", "John Steinbeck", True))
-books.append(Books("The Scarlet Letter", "Nathaniel Hawthorne", True))
-books.append(Books("The Picture of Dorian Gray", "Oscar Wilde", True))
-books.append(Books("Sense and Sensibility", "Jane Austen", True))
-books.append(Books("Emma", "Jane Austen", True))
-books.append(Books("Persuasion", "Jane Austen", True))
-books.append(Books("Jane Eyre", "Charlotte Brontë", True))
-books.append(Books("Wuthering Heights", "Emily Brontë", True))
-books.append(Books("Little Women", "Louisa May Alcott", True))
-books.append(Books("The Secret Garden", "Frances Hodgson Burnett", True))
-books.append(Books("Anne of Green Gables", "L. M. Montgomery", True))
-books.append(Books("The Adventures of Tom Sawyer", "Mark Twain", True))
-books.append(Books("Adventures of Huckleberry Finn", "Mark Twain", True))
-books.append(Books("The Call of Cthulhu", "H. P. Lovecraft", True))
-books.append(Books("The Complete Sherlock Holmes", "Arthur Conan Doyle", True))
-books.append(Books("Good Omens", "Neil Gaiman & Terry Pratchett", True))
-books.append(Books("American Gods", "Neil Gaiman", True))
-books.append(Books("Neverwhere", "Neil Gaiman", True))
-books.append(Books("The Graveyard Book", "Neil Gaiman", True))
-books.append(Books("The Name of the Wind", "Patrick Rothfuss", True))
-books.append(Books("The Wise Man's Fear", "Patrick Rothfuss", True))
-books.append(Books("The Girl Who Drank the Moon", "Kelly Barnhill", True))
-books.append(Books("Eragon", "Christopher Paolini", True))
-books.append(Books("Eldest", "Christopher Paolini", True))
-books.append(Books("Brisingr", "Christopher Paolini", True))
-books.append(Books("Inheritance", "Christopher Paolini", True))
-books.append(Books("The Midnight Library", "Matt Haig", True))
-books.append(Books("A Man Called Ove", "Fredrik Backman", True))
-books.append(Books("The Little Prince", "Antoine de Saint-Exupéry", True))
-books.append(Books("The Stranger in the Lifeboat", "Mitch Albom", True))
-books.append(Books("Tuesdays with Morrie", "Mitch Albom", True))
-books.append(Books("The Shack", "William P. Young", True))
-books.append(Books("The Lord of the Flies", "William Golding", True))
-books.append(Books("A Clockwork Orange", "Anthony Burgess", True))
-books.append(Books("The Outsiders", "S. E. Hinton", True))
-books.append(Books("Of Mice and Men", "John Steinbeck", True))
-books.append(Books("The Pearl", "John Steinbeck", True))
-books.append(Books("Catch-22", "Joseph Heller", True))
-books.append(Books("One Hundred Years of Solitude", "Gabriel García Márquez", True))
-books.append(Books("Love in the Time of Cholera", "Gabriel García Márquez", True))
-books.append(Books("The Old Curiosity Shop", "Charles Dickens", True))
-books.append(Books("Great Expectations", "Charles Dickens", True))
-books.append(Books("Oliver Twist", "Charles Dickens", True))
-books.append(Books("A Tale of Two Cities", "Charles Dickens", True))
-books.append(Books("David Copperfield", "Charles Dickens", True))
-books.append(Books("Bleak House", "Charles Dickens", True))
-books.append(Books("Hard Times", "Charles Dickens", True))
-books.append(Books("The Adventures of Sherlock Holmes", "Arthur Conan Doyle", True))
-books.append(Books("The Sign of the Four", "Arthur Conan Doyle", True))
-books.append(Books("The Return of Sherlock Holmes", "Arthur Conan Doyle", True))
-books.append(Books("The Silmarillion", "J.R.R. Tolkien", True))
-books.append(Books("Unfinished Tales", "J.R.R. Tolkien", True))
-books.append(Books("The Casual Vacancy", "J.K. Rowling", True))
-books.append(Books("Fantastic Beasts and Where to Find Them", "J.K. Rowling", True))
-books.append(Books("The Casual Vacancy", "J.K. Rowling", True))
-books.append(Books("The Girl with All the Gifts", "M. R. Carey", True))
-books.append(Books("World War Z", "Max Brooks", True))
-books.append(Books("The Hunger Games: Ballad of Songbirds and Snakes", "Suzanne Collins", True))
-books.append(Books("The Book of Negroes", "Lawrence Hill", True))
-books.append(Books("The Poisonwood Bible", "Barbara Kingsolver", True))
-books.append(Books("Cloud Atlas", "David Mitchell", True))
-books.append(Books("The Curious Incident of the Dog in the Night-Time", "Mark Haddon", True))
-books.append(Books("The Perks of Being a Wallflower", "Stephen Chbosky", True))
-books.append(Books("A Wrinkle in Time", "Madeleine L'Engle", True))
-books.append(Books("Matilda", "Roald Dahl", True))
-books.append(Books("Charlie and the Chocolate Factory", "Roald Dahl", True))
-books.append(Books("The BFG", "Roald Dahl", True))
-books.append(Books("The Witches", "Roald Dahl", True))
-books.append(Books("The Little Mermaid", "Hans Christian Andersen", True))
-books.append(Books("The Snow Queen", "Hans Christian Andersen", True))
-books.append(Books("Grimm's Fairy Tales", "Brothers Grimm", True))
-books.append(Books("Peter Pan", "J. M. Barrie", True))
-books.append(Books("Alice's Adventures in Wonderland", "Lewis Carroll", True))
-books.append(Books("Through the Looking-Glass", "Lewis Carroll", True))
-books.append(Books("The Wind in the Willows", "Kenneth Grahame", True))
-books.append(Books("Black Beauty", "Anna Sewell", True))
-books.append(Books("The Swiss Family Robinson", "Johann David Wyss", True))
-books.append(Books("Around the World in Eighty Days", "Jules Verne", True))
-books.append(Books("Journey to the Center of the Earth", "Jules Verne", True))
-books.append(Books("Twenty Thousand Leagues Under the Sea", "Jules Verne", True))
-books.append(Books("The Mysterious Island", "Jules Verne", True))
-books.append(Books("The Lost World", "Arthur Conan Doyle", True))
-books.append(Books("Heart of Darkness", "Joseph Conrad", True))
-books.append(Books("The Stranger", "Harlan Coben", True))
-books.append(Books("The Girl Who Loved Tom Gordon", "Stephen King", True))
-books.append(Books("Pet Sematary", "Stephen King", True))
-books.append(Books("Doctor Sleep", "Stephen King", True))
-books.append(Books("The Alchemist's Daughter", "Theodora Goss", True))
-books.append(Books("Good Girl, Bad Blood", "Holly Jackson", True))
-books.append(Books("A Good Girl's Guide to Murder", "Holly Jackson", True))
-books.append(Books("The Shadowhunter Chronicles", "Cassandra Clare", True))
-books.append(Books("City of Bones", "Cassandra Clare", True))
-books.append(Books("City of Ashes", "Cassandra Clare", True))
-books.append(Books("City of Glass", "Cassandra Clare", True))
-books.append(Books("The Mortal Instruments", "Cassandra Clare", True))
-books.append(Books("Red Queen", "Victoria Aveyard", True))
-books.append(Books("The Selection", "Kiera Cass", True))
-books.append(Books("The Maze Runner: The Kill Order", "James Dashner", True))
-books.append(Books("Shadow and Bone", "Leigh Bardugo", True))
-books.append(Books("Six of Crows", "Leigh Bardugo", True))
-books.append(Books("Crooked Kingdom", "Leigh Bardugo", True))
-books.append(Books("The Giver of Stars", "Jojo Moyes", True))
-books.append(Books("Me Before You", "Jojo Moyes", True))
-books.append(Books("The Book of Life", "Deborah Harkness", True))
-books.append(Books("The Nightingale", "Kristin Hannah", True))
-books.append(Books("The Goldfinch", "Donna Tartt", True))
-books.append(Books("The Stand", "Stephen King", True))
-books.append(Books("Salem's Lot", "Stephen King", True))
-books.append(Books("Carrie", "Stephen King", True))
-books.append(Books("The Green Mile", "Stephen King", True))
-books.append(Books("11/22/63", "Stephen King", True))
-books.append(Books("The Hitchhiker's Guide to the Galaxy", "Douglas Adams", True))
-books.append(Books("The Restaurant at the End of the Universe", "Douglas Adams", True))
-books.append(Books("Life, the Universe and Everything", "Douglas Adams", True))
-books.append(Books("So Long, and Thanks for All the Fish", "Douglas Adams", True))
-books.append(Books("Mostly Harmless", "Douglas Adams", True))
-books.append(Books("The Fellowship of the Ring", "J.R.R. Tolkien", True))
-books.append(Books("The Two Towers", "J.R.R. Tolkien", True))
-books.append(Books("The Return of the King", "J.R.R. Tolkien", True))
-books.append(Books("The Girl Who Played with Fire", "Stieg Larsson", True))
-books.append(Books("The Girl Who Kicked the Hornets' Nest", "Stieg Larsson", True))
-books.append(Books("The Help", "Kathryn Stockett", True))
-books.append(Books("The Lovely Bones", "Alice Sebold", True))
-books.append(Books("The Time Traveler's Wife", "Audrey Niffenegger", True))
-books.append(Books("The Light We Cannot See", "Anthony Doerr", True))
-books.append(Books("The Book of Thief", "Markus Zusak", True))
-books.append(Books("A Song of Ice and Fire: A Game of Thrones", "George R. R. Martin", True))
-books.append(Books("A Clash of Kings", "George R. R. Martin", True))
-books.append(Books("A Storm of Swords", "George R. R. Martin", True))
-books.append(Books("A Feast for Crows", "George R. R. Martin", True))
-books.append(Books("A Dance with Dragons", "George R. R. Martin", True))
-books.append(Books("The Fault in Our Stars", "John Green", True))
-books.append(Books("Paper Towns", "John Green", True))
-books.append(Books("An Abundance of Katherines", "John Green", True))
-books.append(Books("The Girl in Room 105", "Chetan Bhagat", True))
-books.append(Books("Five Point Someone", "Chetan Bhagat", True))
-books.append(Books("2 States", "Chetan Bhagat", True))
-books.append(Books("Half Girlfriend", "Chetan Bhagat", True))
-books.append(Books("Revolution 2020", "Chetan Bhagat", True))
-books.append(Books("The Inheritance Games", "Jennifer Lynn Barnes", True))
-books.append(Books("The Hawthorne Legacy", "Jennifer Lynn Barnes", True))
-books.append(Books("The Midnight Library", "Matt Haig", True))
-books.append(Books("Reasons to Stay Alive", "Matt Haig", True))
-books.append(Books("Thinking, Fast and Slow", "Daniel Kahneman", True))
-books.append(Books("Outliers", "Malcolm Gladwell", True))
-books.append(Books("Blink", "Malcolm Gladwell", True))
-books.append(Books("Educated", "Tara Westover", True))
-books.append(Books("The Glass Castle", "Jeannette Walls", True))
-books.append(Books("Into the Wild", "Jon Krakauer", True))
-books.append(Books("The Spy Who Came in from the Cold", "John le Carré", True))
-books.append(Books("Tinker Tailor Soldier Spy", "John le Carré", True))
-books.append(Books("The Girl with the Louding Voice", "Abi Daré", True))
-books.append(Books("Normal People", "Sally Rooney", True))
-books.append(Books("Conversations with Friends", "Sally Rooney", True))
-books.append(Books("The Little Book of Common Sense Investing", "John C. Bogle", True))
-books.append(Books("Security Analysis", "Benjamin Graham", True))
-books.append(Books("Atomic Habits Workbook", "James Clear", True))
-books.append(Books("Mindset", "Carol S. Dweck", True))
-books.append(Books("Drive", "Daniel H. Pink", True))
-books.append(Books("The Power of Positive Thinking", "Norman Vincent Peale", True))
-books.append(Books("Who Moved My Cheese?", "Spencer Johnson", True))
-books.append(Books("Introduction to Algorithms", "Thomas H. Cormen", True))
-books.append(Books("Clean Code", "Robert C. Martin", True))
-books.append(Books("The Pragmatic Programmer", "Andrew Hunt", True))
-books.append(Books("Python Crash Course", "Eric Matthes", True))
-books.append(Books("Automate the Boring Stuff with Python", "Al Sweigart", True))
+
+
+# --- MAIN SYSTEM ---
+
+# Initial load from Database
+all_books = Users.load_books_from_db()
+user = Users("Vijay", "U001")
+
+
 def display_menu():
-    print("****MENU FOR LIBRARY MANAGEMENT SYSTEM****")
+    print("\n**** LIBRARY MANAGEMENT SYSTEM (SQL CONNECTED) ****")
     print("1. View Available Books")
-    print("2. Borrow a Book")
-    print("3. Return a Book")
+    print("2. Borrow a Book (Enter ID)")
+    print("3. Return a Book (Enter ID)")
     print("4. View Borrowed Books")
     print("5. User Information")
     print("6. Search Book by Author")
     print("7. Exit")
-user = Users("Vijay", "U001")
+
+
 while True:
     display_menu()
-    time.sleep(3)
     choice = input("Enter your choice (1-7): ").strip()
+
     if choice == '1':
-        Users.view_available_books_formatted(books)
-        time.sleep(2)
+        Users.view_available_books_formatted(all_books)
+
     elif choice == '2':
-        book_name = input("Enter the name of the book to borrow: ").strip()
-        book_to_borrow = next((b for b in books if b.name.lower() == book_name.lower()), None)
-        if book_to_borrow:
-            print(user.borrow_book(book_to_borrow))
-        else:
-            print("Book not found in the library.")
-        time.sleep(2)
+        try:
+            bid = int(input("Enter the Book ID to borrow: "))
+            book_to_borrow = next((b for b in all_books if b.id == bid), None)
+            if book_to_borrow:
+                print(user.borrow_book(book_to_borrow))
+            else:
+                print("Invalid Book ID.")
+        except ValueError:
+            print("Please enter a numeric ID.")
+
     elif choice == '3':
-        book_name = input("Enter the name of the book to return: ").strip()
-        book_to_return = next((b for b in books if b.name.lower() == book_name.lower()), None)
-        if book_to_return:
-            print(user.return_book(book_to_return))
-        else:
-            print("Book not found in the library.")
-        time.sleep(2)
+        try:
+            bid = int(input("Enter the Book ID to return: "))
+            book_to_return = next((b for b in all_books if b.id == bid), None)
+            if book_to_return:
+                print(user.return_book(book_to_return))
+            else:
+                print("Invalid Book ID.")
+        except ValueError:
+            print("Please enter a numeric ID.")
+
     elif choice == '4':
-        print(user.view_borrowed_books())
-        time.sleep(2)
+        print(f"{user.user_name} has borrowed: {', '.join(user.books_borrowed) if user.books_borrowed else 'No books'}")
+
     elif choice == '5':
         print(user.user_info())
-        time.sleep(2)
+
     elif choice == '6':
-        author_name = input("Enter the name of the author to search: ").strip()
-        print(Users.search_books_by_author(books, author_name))
-        time.sleep(2)
+        author_name = input("Enter author name: ").strip()
+        print(Users.search_books_by_author(all_books, author_name))
+
     elif choice == '7':
-        print("Exiting the Library Management System. Goodbye!")
-        time.sleep(5)
+        print("Goodbye!")
         break
-    else:
-        print("Invalid choice. Please try again.")
+
     time.sleep(1)
-    print()
